@@ -4,7 +4,15 @@ go 1.16
 
 require (
 	github.com/diez37/go-packages v1.0.1
+	github.com/doug-martin/goqu/v9 v9.18.0
+	github.com/go-chi/chi/v5 v5.0.7
+	github.com/go-playground/validator/v10 v10.10.1
+	github.com/golang-migrate/migrate/v4 v4.15.1
+	github.com/google/uuid v1.3.0
 	github.com/joho/godotenv v1.3.0
 	github.com/spf13/cobra v1.4.0
+	go.opentelemetry.io/otel v1.4.1
+	go.opentelemetry.io/otel/trace v1.4.1
+	golang.org/x/crypto v0.0.0-20220313003712-b769efc7c000
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
