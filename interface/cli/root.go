@@ -84,18 +84,15 @@ func NewRootCommand() (*cobra.Command, error) {
 
 				hasher := hash.NewCrypto(hashConfig, tracer)
 				blocker := blocker.NewBlocker(repository, tracer)
-				service := password.NewPassword(passwordConfig, hasher, repository, tracer, blocker)
+				password := password.NewPassword(passwordConfig, hasher, repository, tracer, blocker)
 
-				ctx, generalCancelFnc := context.WithCancel(closer.GetContext())
-				defer generalCancelFnc()
+				ctx, cancelFunc := context.WithCancel(closer.GetContext())
+				defer cancelFunc()
 
 				wg := &errgroup.Group{}
 				wg.Go(func() error {
-					parentCtx, cancelFunc := context.WithCancel(ctx)
-					defer cancelFunc()
-
-					if err := http.Serve(parentCtx, container, logger, service, blocker); err != nil {
-						generalCancelFnc()
+					if err := http.Serve(ctx, container, logger, password, blocker); err != nil {
+						cancelFunc()
 						return err
 					}
 

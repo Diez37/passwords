@@ -23,6 +23,93 @@ func NewSql(db goqu.SQLDatabase, tracer trace.Tracer) Repository {
 	return &sql{db: db, tracer: tracer}
 }
 
+func (repository *sql) Count(ctx context.Context) (int64, error) {
+	ctx, span := repository.tracer.Start(ctx, "Count")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("repository", "sql"),
+	)
+
+	sql, _, err := goqu.From(sqlTableName).Select(goqu.COUNT("uuid")).ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := repository.db.QueryContext(ctx, sql)
+	if err != nil {
+		return 0, err
+	}
+
+	for rows.Next() {
+		count := int64(0)
+
+		if err := rows.Scan(&count); err != nil {
+			return 0, err
+		}
+
+		return count, nil
+	}
+
+	return 0, nil
+}
+
+func (repository *sql) Page(ctx context.Context, page uint, limit uint, login uuid.UUID) ([]*Password, error) {
+	ctx, span := repository.tracer.Start(ctx, "Page")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("page", int(page)),
+		attribute.Int("limit", int(limit)),
+		attribute.String("repository", "sql"),
+	)
+
+	sql, args, err := goqu.From(sqlTableName).
+		Where(goqu.Ex{"login": login.String()}).
+		Offset(page * limit).
+		Limit(limit).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := repository.db.QueryContext(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var passwords []*Password
+
+	for rows.Next() {
+		password := &Password{}
+
+		err := rows.Scan(
+			&password.Id,
+			&password.Uuid,
+			&password.Login,
+			&password.Password,
+			&password.Disabled,
+			&password.OneTime,
+			&password.CreatedAt,
+			&password.UpdateAt,
+			&password.ValidUntil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		passwords = append(passwords, password)
+	}
+
+	if len(passwords) == 0 {
+		return nil, db.RecordNotFoundError
+	}
+
+	return passwords, nil
+}
+
 func (repository *sql) FindByLogin(ctx context.Context, login uuid.UUID) ([]*Password, error) {
 	ctx, span := repository.tracer.Start(ctx, "FindByLogin")
 	defer span.End()

@@ -18,8 +18,14 @@ type Blocker interface {
 	DisableByUuids(context.Context, ...uuid.UUID) (bool, error)
 }
 
+type Paginator interface {
+	Count(ctx context.Context) (int64, error)
+	Page(ctx context.Context, page uint, limit uint, login uuid.UUID) ([]*Password, error)
+}
+
 type Repository interface {
 	Finder
 	Saver
 	Blocker
+	Paginator
 }

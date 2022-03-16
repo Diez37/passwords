@@ -9,10 +9,10 @@ import (
 )
 
 func Serve(ctx context.Context, blockerConfig *config.Blocker, logger log.Logger, blocker blocker.Blocker) {
-	logger.Info("repeater: started")
-
-	parentCtx, cancelFunc := context.WithCancel(ctx)
+	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
+
+	logger.Info("repeater: started")
 
 	for {
 		select {
@@ -20,9 +20,9 @@ func Serve(ctx context.Context, blockerConfig *config.Blocker, logger log.Logger
 			logger.Info("repeater: shutdown")
 			return
 		case <-time.After(blockerConfig.BlockInterval):
-			logger.Info("repeater: blocker flush")
+			logger.Info("repeater: passwords blocking")
 
-			if err := blocker.Block(parentCtx); err != nil {
+			if err := blocker.Block(ctx); err != nil {
 				logger.Error(err)
 			}
 		}

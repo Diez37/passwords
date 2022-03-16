@@ -3,7 +3,7 @@ package password
 import (
 	"context"
 	"errors"
-	blocker2 "github.com/Diez37/passwords/application/blocker"
+	"github.com/Diez37/passwords/application/blocker"
 	"github.com/Diez37/passwords/application/hash"
 	"github.com/Diez37/passwords/domain"
 	"github.com/Diez37/passwords/infrastructure/config"
@@ -25,13 +25,13 @@ type Service interface {
 
 type password struct {
 	config     *config.Password
-	blocker    blocker2.Blocker
+	blocker    blocker.Blocker
 	hasher     hash.Hasher
 	repository repository.Repository
 	tracer     trace.Tracer
 }
 
-func NewPassword(config *config.Password, hasher hash.Hasher, repository repository.Repository, tracer trace.Tracer, blocker blocker2.Blocker) Service {
+func NewPassword(config *config.Password, hasher hash.Hasher, repository repository.Repository, tracer trace.Tracer, blocker blocker.Blocker) Service {
 	return &password{config: config, hasher: hasher, repository: repository, tracer: tracer, blocker: blocker}
 }
 
@@ -85,6 +85,11 @@ func (service *password) Check(ctx context.Context, password *domain.Password) (
 
 	for _, pas := range passwords {
 		if service.hasher.Check(ctx, password.Login, password.Password, pas.Password) {
+			if pas.ValidUntil.Sub(time.NowUTC()).Seconds() <= 0 {
+				service.blocker.Add(ctx, pas.Uuid)
+				return false, nil
+			}
+
 			if pas.OneTime {
 				service.blocker.Add(ctx, pas.Uuid)
 			}

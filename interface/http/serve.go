@@ -13,12 +13,24 @@ import (
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+	"net"
 	"net/http"
 )
 
 // Serve configuration and running http server
-func Serve(ctx context.Context, container container.Container, logger log.Logger, service password.Service, blocker blocker.Blocker) error {
-	return container.Invoke(func(
+func Serve(
+	ctx context.Context,
+	container container.Container,
+	logger log.Logger,
+	service password.Service,
+	blocker blocker.Blocker,
+) error {
+	ctx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+
+	errGroup := &errgroup.Group{}
+
+	err := container.Invoke(func(
 		server *http.Server,
 		config *httpServer.Config,
 		router chi.Router,
@@ -26,7 +38,7 @@ func Serve(ctx context.Context, container container.Container, logger log.Logger
 		repository repository.Repository,
 		tracer trace.Tracer,
 		validator *validator.Validate,
-	) error {
+	) {
 		router.Mount("/api", api.Router(
 			repository,
 			tracer,
@@ -36,15 +48,16 @@ func Serve(ctx context.Context, container container.Container, logger log.Logger
 			blocker,
 		))
 
-		errGroup := &errgroup.Group{}
-
-		httpCtx, httpCancelFunc := context.WithCancel(ctx)
-		defer httpCancelFunc()
-
 		errGroup.Go(func() error {
+			defer cancelFunc()
+
 			logger.Infof("http server: started")
+
+			server.BaseContext = func(_ net.Listener) context.Context {
+				return ctx
+			}
+
 			if err := server.ListenAndServe(); err != http.ErrServerClosed {
-				httpCancelFunc()
 				return err
 			}
 
@@ -52,16 +65,17 @@ func Serve(ctx context.Context, container container.Container, logger log.Logger
 		})
 
 		errGroup.Go(func() error {
-			<-httpCtx.Done()
+			<-ctx.Done()
 
 			logger.Infof("http server: shutdown")
 
-			ctxTimeout, cancelFnc := context.WithTimeout(context.Background(), config.ShutdownTimeout)
-			defer cancelFnc()
-
-			return server.Shutdown(ctxTimeout)
+			return server.Close()
 		})
-
-		return errGroup.Wait()
 	})
+
+	if err != nil {
+		return err
+	}
+
+	return errGroup.Wait()
 }
